@@ -233,6 +233,15 @@ end
 
 function pack.clean()
     local inactive = utils.get_inactive()
+
+    if #inactive == 0 then
+      return
+    end
+
+    local choice = vim.fn.confirm("Delete inactive plugins?", "&Yes/&No", 2)
+    if choice == 2 then
+      return
+    end
     vim.pack.del(inactive)
 end
 

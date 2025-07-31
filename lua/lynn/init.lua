@@ -227,12 +227,13 @@ function pack.setup(modname)
 end
 
 function pack.sync()
-    -- cleanup
-    local inactive = utils.get_inactive()
-    vim.pack.del(inactive)
-
     -- update
     vim.pack.update()
+end
+
+function pack.clean()
+    local inactive = utils.get_inactive()
+    vim.pack.del(inactive)
 end
 
 return pack

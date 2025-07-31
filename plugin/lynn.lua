@@ -1,3 +1,6 @@
 vim.api.nvim_create_user_command("PackSync", function()
     require("lynn").sync()
 end, {})
+vim.api.nvim_create_user_command("PackClean", function()
+    require("lynn").clean()
+end, {})

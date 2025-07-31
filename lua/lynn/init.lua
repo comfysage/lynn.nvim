@@ -247,7 +247,9 @@ function pack.clean()
         prompt = "Delete inactive plugins? (y/N)\n" .. plugstr,
     }, function (input)
       if string.lower(input) == 'y' then
-        vim.pack.del(inactive)
+        vim.tbl_map(function(p)
+          vim.fs.rm(p.path, { recursive = true })
+        end, inactive)
       end
     end)
 end

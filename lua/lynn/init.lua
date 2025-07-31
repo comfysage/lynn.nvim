@@ -238,7 +238,12 @@ function pack.clean()
       return
     end
 
-    local choice = vim.fn.confirm("Delete inactive plugins?", "&Yes/&No", 2)
+    local pluglist = vim.iter(inactive):map(function(p)
+        return " - " .. p.spec.name .. "\n\t" .. p.path
+    end):totable()
+    local plugstr = table.concat(pluglist, "\n")
+
+    local choice = vim.fn.confirm("Delete inactive plugins?\n" .. plugstr, "&Yes/&No", 2)
     if choice == 2 then
       return
     end

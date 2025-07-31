@@ -17,6 +17,15 @@ ideal for native-first distros or anyone who prefers minimal configuration flow.
 - just a clear place to define what you want, and a helper to make it happen
 - keeps your plugin specs simple
 
+###### installation
+
+```lua
+-- init.lua or wherever
+vim.pack.add({
+  { src = "https://github.com/comfysage/lynn.nvim", name = "lynn" }
+})
+```
+
 ###### usage
 
 1. define your plugins in `lua/plugins.lua` (or wherever you choose)

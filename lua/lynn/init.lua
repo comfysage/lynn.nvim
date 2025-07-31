@@ -243,11 +243,13 @@ function pack.clean()
     end):totable()
     local plugstr = table.concat(pluglist, "\n")
 
-    local choice = vim.fn.confirm("Delete inactive plugins?\n" .. plugstr, "&Yes/&No", 2)
-    if choice == 2 then
-      return
-    end
-    vim.pack.del(inactive)
+    vim.ui.input({
+        prompt = "Delete inactive plugins? (y/N)\n" .. plugstr,
+    }, function (input)
+      if string.lower(input) == 'y' then
+        vim.pack.del(inactive)
+      end
+    end)
 end
 
 return pack

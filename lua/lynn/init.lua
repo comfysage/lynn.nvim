@@ -1,15 +1,19 @@
+---@module 'lynn'
+
 local utils = require("lynn.utils")
 
-local pack = {}
+local lynn = {}
+
+-- utils --
 
 local function logdebug(...)
-    if vim.o.verbose > 0 then
-        vim.api.nvim_echo({ ... }, false, { kind = 'verbose', verbose = true })
-    end
+  if vim.o.debug ~= "" then
+    vim.notify(table.concat({ ... }, "\n"), vim.log.levels.DEBUG)
+  end
 end
 
 local function logerr(...)
-    vim.api.nvim_echo({ ... }, true, { err = true })
+  vim.notify(table.concat({ ... }, "\n"), vim.log.levels.ERROR)
 end
 
 ---@class lynn.plug
@@ -21,6 +25,7 @@ end
 ---@field event? string|string[]
 ---@field before? function
 ---@field after? function
+---@field build? string
 ---@field deps? lynn.plug.spec[]
 
 ---@class lynn.plug.spec : lynn.plug
@@ -31,227 +36,278 @@ end
 
 --- { [path]: { plug: <plug>, id: <id> } }
 ---@type table<string, { plug: lynn.plug, id: number }>
-pack.loaded = {}
+lynn.loaded = {}
 
-pack.packdir = vim.fs.joinpath(vim.fn.stdpath("data"), "site", "pack", "core", "opt")
+lynn.packdir = vim.fs.joinpath(vim.fn.stdpath("data"), "site", "pack", "core", "opt")
 
-pack.group = vim.api.nvim_create_augroup("lynn", { clear = true })
+lynn.group = vim.api.nvim_create_augroup("lynn", { clear = true })
 
 local n_loaded = 0
 
 --- { [name]: <plug> }
 ---@class table<string, lynn.plug>
-pack.plugins = {}
+lynn.plugins = {}
 
-vim.api.nvim_create_autocmd("User", {
-    pattern = "PackLoadAll",
-    group = pack.group,
-    once = true,
-    callback = function()
-        pack.loadall()
-    end,
-})
+-- hooks --
 
--- utils --
+---@alias lynn.hook fun(spec: lynn.plug)
+---@alias lynn.hook.builtin
+---|'before'
+---|'build'
+---|'after'
 
----@alias lynn.hook fun(name: string)
+---@type table<lynn.hook.builtin, lynn.hook>
+lynn.default_hooks = {
+  before = function(_) end,
+  build = function(spec)
+    local buildstr = spec.build
+    if not buildstr or buildstr == "" then
+      return
+    end
 
-pack.default_hooks = {
-    after = function(name)
-        vim.cmd.runtime({ "config/" .. name .. ".lua", bang = true })
-    end,
+    if string.sub(buildstr, 0, 1) == ":" then
+      vim.cmd(string.sub(buildstr, 2))
+      return
+    end
+
+    if string.sub(buildstr, 0, 1) == ">" then
+      local shellstr = string.sub(buildstr, 2)
+
+      vim.system(vim.split(shellstr, " "), {
+        cwd = spec.path,
+      }, function(result)
+        if result.code == 0 then
+          return
+        end
+
+        logerr("error running build command for " .. spec.name .. ":", "\t" .. result.stderr)
+      end)
+      return
+    end
+  end,
+  after = function(spec)
+    vim.cmd.runtime({ "config/" .. spec.name .. ".lua", bang = true })
+  end,
 }
 
+---@param plug lynn.plug
+---@param hook string
+---@param fn function
 local function wraphook(plug, hook, fn)
-    if not fn or type(fn) ~= "function" then
-        return
-    end
+  if not fn or type(fn) ~= "function" then
+    return
+  end
 
-    logdebug({ 'running "' .. hook .. '" for plugin "' .. plug.name .. '"' })
-    do
-        local ok, result = pcall(fn, plug.name)
-        if not ok then
-            vim.notify(
-                "error running " .. hook .. " function for " .. plug.name .. ":\n\t" .. result,
-                vim.log.levels.ERROR
-            )
-            return
-        end
+  logdebug('running "' .. hook .. '" for plugin "' .. plug.name .. '"')
+  do
+    local ok, result = pcall(fn, plug)
+    if not ok then
+      logerr("error running " .. hook .. " function for " .. plug.name .. ":", "\t" .. result)
+      return
     end
+  end
 end
 
 ---@param plug lynn.plug
 ---@param hook string
-local function runhook(plug, hook)
-    if type(hook) ~= "string" then
-        return
+---@param use_default? boolean
+local function runhook(plug, hook, use_default)
+  if type(hook) ~= "string" then
+    return
+  end
+  local fn = plug[hook]
+  if not fn or type(fn) ~= "function" then
+    if not use_default then
+      return
     end
-    local fn = plug[hook]
-    if not fn or type(fn) ~= "function" then
-        return wraphook(plug, hook, pack.default_hooks[hook])
-    end
+    wraphook(plug, hook, lynn.default_hooks[hook])
+    return
+  end
 
-    wraphook(plug, hook, fn)
-end
-
-local function pack_lazy(plug)
-    vim.api.nvim_create_autocmd(plug.event, {
-        group = pack.group,
-        once = true,
-        callback = function()
-            pack.plugadd(plug, true)
-        end,
-    })
+  wraphook(plug, hook, fn)
 end
 
 ---@param plug lynn.plug
+local function pack_lazy(plug)
+  vim.api.nvim_create_autocmd(plug.event, {
+    group = lynn.group,
+    once = true,
+    callback = function()
+      lynn.plugadd(plug, true)
+    end,
+  })
+end
+
+--- load a plugin
+--- - add the plugin to the loaded list
+--- - check deps
+--- - run |:packadd|
+--- - run before/after hooks
+--- - check if `after/` dirs should be loaded
+---@param plug lynn.plug
 ---@param load? boolean
-function pack.plugadd(plug, load)
-    if type(plug) == "string" then
-        plug = pack.plugins[plug]
-    end
-    if pack.loaded[plug.path] then
-        return
-    end
+function lynn.plugadd(plug, load)
+  if type(plug) == "string" then
+    plug = lynn.plugins[plug]
+  end
+  if lynn.loaded[plug.path] then
+    return
+  end
 
-    -- add dependencies
-    if plug.deps then
-        vim.tbl_map(pack.register, plug.deps)
-    end
+  -- add dependencies
+  if plug.deps then
+    vim.tbl_map(lynn.register, plug.deps)
+  end
 
-    -- add to loaded
-    n_loaded = n_loaded + 1
-    pack.loaded[plug.path] = { plug = plug, id = n_loaded }
+  -- add to loaded
+  n_loaded = n_loaded + 1
+  lynn.loaded[plug.path] = { plug = plug, id = n_loaded }
 
-    runhook(plug, "before")
+  runhook(plug, "before", true)
 
-    vim.cmd.packadd({ plug.name, bang = not load })
+  vim.cmd.packadd({ plug.name, bang = not load })
 
-    runhook(plug, "after")
+  runhook(plug, "after", true)
 
-    local should_load_after_dir = vim.v.vim_did_enter == 1 and load and vim.o.loadplugins
+  local should_load_after_dir = vim.v.vim_did_enter == 1 and load and vim.o.loadplugins
 
-    if should_load_after_dir then
-        local after_paths = vim.fn.glob(plug.path .. "/after/plugin/**/*.{vim,lua}", false, true)
-        vim.tbl_map(function(path)
-            pcall(vim.cmd.source, vim.fn.fnameescape(path))
-        end, after_paths)
-    end
+  if should_load_after_dir then
+    local after_paths = vim.fn.glob(plug.path .. "/after/plugin/**/*.{vim,lua}", false, true)
+    vim.tbl_map(function(path)
+      pcall(vim.cmd.source, vim.fn.fnameescape(path))
+    end, after_paths)
+  end
 end
 
 ---@param plug lynn.plug.spec|string
 ---@return lynn.plug
-function pack.norm(plug)
-    if type(plug) == "string" then
-        plug = { plug }
-    end
-    plug.url = plug.url or plug[1]
-    plug.url = utils.norm_url(plug.url)
-    plug.name = plug.name or utils.get_name(plug.url)
-    plug.path = plug.path or vim.fs.joinpath(pack.packdir, plug.name)
-    ---@diagnostic disable-next-line: cast-type-mismatch
-    ---@cast plug lynn.plug
-    return plug
+function lynn.norm(plug)
+  if type(plug) == "string" then
+    plug = { plug }
+  end
+  plug.url = plug.url or plug[1]
+  plug.url = utils.norm_url(plug.url)
+  plug.name = plug.name or utils.get_name(plug.url)
+  plug.path = plug.path or vim.fs.joinpath(lynn.packdir, plug.name)
+  ---@diagnostic disable-next-line: cast-type-mismatch
+  ---@cast plug lynn.plug
+  return plug
 end
 
 --- translate lynn.plug to vim.pack.Spec format
 ---@param plug lynn.plug
 ---@return vim.pack.Spec
-function pack.translate(plug)
-    return {
-        src = plug.url,
-        name = plug.name,
-        version = plug.version,
-    }
+function lynn.translate(plug)
+  return {
+    src = plug.url,
+    name = plug.name,
+    version = plug.version,
+  }
 end
 
+--- register a plugin
 ---@param plug lynn.plug.spec|string
-function pack.register(plug)
-    local p = pack.norm(plug)
+---@param nopack? boolean avoid adding the plugin to `vim.pack` until later
+function lynn.register(plug, nopack)
+  local p = lynn.norm(plug)
 
-    pack.plugins[p.name] = vim.tbl_extend("keep", p, pack.plugins[p.name] or {})
+  lynn.plugins[p.name] = vim.tbl_extend("keep", p, lynn.plugins[p.name] or {})
+  if not nopack then
+    vim.pack.add({ lynn.translate(p) }, { load = false })
+  end
 end
 
+--- load a plugin by either running `lynn.plugadd` or wrapping the callback in
+--- an autocmd
 ---@param plug lynn.plug
-function pack.load(plug)
-    if not plug.lazy then
-        pack.plugadd(plug)
-    elseif plug.event then
-        pack_lazy(plug)
-    end
+function lynn.load(plug)
+  if not plug.lazy then
+    lynn.plugadd(plug)
+  elseif plug.event then
+    pack_lazy(plug)
+  end
 end
 
-function pack.loadall()
-    vim.tbl_map(pack.load, pack.plugins)
+--- load all plugins
+function lynn.loadall()
+  vim.tbl_map(lynn.load, lynn.plugins)
 end
 
+--- import a list of plugins from a module
 ---@param modname string
-function pack.import(modname)
-    local plugs
+function lynn.import(modname)
+  local plugs
 
-    do
-        local ok, result = pcall(require, modname)
-        if ok then
-            plugs = result
-        end
+  do
+    local ok, result = pcall(require, modname)
+    if ok then
+      plugs = result
     end
-    if not plugs then
-        return
-    end
+  end
+  if not plugs then
+    return
+  end
 
-    local packspecs = vim.iter(ipairs(plugs))
-        :map(function(_, p)
-            return pack.norm(p)
-        end)
-        :map(function(p)
-            local ok, result = pcall(pack.register, p)
-            if not ok then
-                logerr({ 'error while registering plugin "' .. p.name .. '":\n\t' }, { result })
-                return
-            end
-            return pack.translate(p)
-        end)
-        :totable()
-    vim.pack.add(packspecs, { load = false })
-end
-
----@param modname? string
-function pack.setup(modname)
-    if modname then
-        pack.import(modname)
-    end
-
-    vim.api.nvim_exec_autocmds("User", {
-        pattern = "PackLoadAll",
-    })
-end
-
-function pack.sync()
-    -- update
-    vim.pack.update()
-end
-
-function pack.clean()
-    local inactive = utils.get_inactive()
-
-    if #inactive == 0 then
-      return
-    end
-
-    local pluglist = vim.iter(inactive):map(function(p)
-        return " - " .. p.spec.name .. "\n\t" .. p.path
-    end):totable()
-    local plugstr = table.concat(pluglist, "\n")
-
-    vim.ui.input({
-        prompt = "Delete inactive plugins? (y/N)\n" .. plugstr,
-    }, function (input)
-      if string.lower(input) == 'y' then
-        vim.tbl_map(function(p)
-          vim.fs.rm(p.path, { recursive = true })
-        end, inactive)
-      end
+  local packspecs = vim
+    .iter(ipairs(plugs))
+    :map(function(_, p)
+      return lynn.norm(p)
     end)
+    :map(function(p)
+      local ok, result = pcall(lynn.register, p, true)
+      if not ok then
+        logerr('error while registering plugin "' .. p.name .. '":', "\t" .. result)
+        return
+      end
+      return lynn.translate(p)
+    end)
+    :totable()
+  vim.pack.add(packspecs, { load = false })
 end
 
-return pack
+--- run |lynn.import()| and run packload for all plugins
+---@param modname? string
+function lynn.setup(modname)
+  if modname then
+    lynn.import(modname)
+  end
+
+  vim.api.nvim_exec_autocmds("User", {
+    pattern = "PackLoadAll",
+  })
+end
+
+function lynn.sync()
+  -- update
+  vim.pack.update()
+end
+
+--- delete inactive plugins.
+--- these include all plugin directories that are not in `vim.pack`.
+function lynn.clean()
+  local inactive = utils.get_inactive()
+
+  if #inactive == 0 then
+    return
+  end
+
+  local pluglist = vim
+    .iter(inactive)
+    :map(function(p)
+      return " - " .. p.spec.name .. "\n\t" .. p.path
+    end)
+    :totable()
+  local plugstr = table.concat(pluglist, "\n")
+
+  vim.ui.input({
+    prompt = "Delete inactive plugins? (y/N)\n" .. plugstr,
+  }, function(input)
+    if string.lower(input) == "y" then
+      vim.tbl_map(function(p)
+        vim.fs.rm(p.path, { recursive = true })
+      end, inactive)
+    end
+  end)
+end
+
+return lynn

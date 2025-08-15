@@ -25,7 +25,7 @@ end
 ---@field event? string|string[]
 ---@field before? function
 ---@field after? function
----@field build? string
+---@field build? string|function
 ---@field deps? lynn.plug.spec[]
 
 ---@class lynn.plug.spec : lynn.plug
@@ -60,6 +60,11 @@ lynn.plugins = {}
 lynn.default_hooks = {
   before = function(_) end,
   build = function(spec)
+    if type(spec.build) ~= "string" then
+      return
+    end
+    ---@type string
+    ---@diagnostic disable-next-line: assign-type-mismatch
     local buildstr = spec.build
     if not buildstr or buildstr == "" then
       return
@@ -111,7 +116,7 @@ end
 ---@param plug lynn.plug
 ---@param hook string
 ---@param use_default? boolean
-local function runhook(plug, hook, use_default)
+function lynn.runhook(plug, hook, use_default)
   if type(hook) ~= "string" then
     return
   end
@@ -163,11 +168,11 @@ function lynn.plugadd(plug, load)
   n_loaded = n_loaded + 1
   lynn.loaded[plug.path] = { plug = plug, id = n_loaded }
 
-  runhook(plug, "before", true)
+  lynn.runhook(plug, "before", true)
 
   vim.cmd.packadd({ plug.name, bang = not load })
 
-  runhook(plug, "after", true)
+  lynn.runhook(plug, "after", true)
 
   local should_load_after_dir = vim.v.vim_did_enter == 1 and load and vim.o.loadplugins
 
@@ -202,6 +207,7 @@ function lynn.translate(plug)
     src = plug.url,
     name = plug.name,
     version = plug.version,
+    data = plug,
   }
 end
 

@@ -12,6 +12,17 @@ vim.api.nvim_create_autocmd("User", {
     require("lynn").loadall()
   end,
 })
+vim.api.nvim_create_autocmd("PackChanged", {
+  group = require("lynn").group,
+  callback = function(ev)
+    local kind = ev.data.kind ---@type string
+
+    if kind == "install" or kind == "update" then
+      local spec = ev.data.spec ---@type lynn.plug
+      require("lynn").runhook(spec, "build", true)
+    end
+  end,
+})
 
 vim.api.nvim_create_user_command("PackUpdate", function(props)
   local names = props.fargs

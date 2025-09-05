@@ -14,6 +14,10 @@ end
 
 local function logerr(...)
   vim.notify(table.concat({ ... }, "\n"), vim.log.levels.ERROR)
+
+  if vim.o.debug == "throw" then
+    error(table.concat({ ... }, "\n"))
+  end
 end
 
 ---@class lynn.plug
@@ -228,15 +232,22 @@ end
 ---@param plug lynn.plug
 function lynn.load(plug)
   if not plug.lazy then
-    lynn.plugadd(plug)
+    return lynn.plugadd(plug)
   elseif plug.event then
-    pack_lazy(plug)
+    return pack_lazy(plug)
   end
+
+  return logerr("plugin " .. plug.name .. " is lazy but has no event")
 end
 
 --- load all plugins
 function lynn.loadall()
-  vim.tbl_map(lynn.load, lynn.plugins)
+  vim.iter(pairs(lynn.plugins)):each(function(name, spec)
+    local ok, result = pcall(lynn.load, spec)
+    if not ok then
+      logerr('error while loading plugin "' .. name .. '":', "\t" .. result)
+    end
+  end)
 end
 
 --- import a list of plugins from a module
@@ -278,8 +289,10 @@ function lynn.setup(modname)
     lynn.import(modname)
   end
 
+  require("lynn").loadall()
+
   vim.api.nvim_exec_autocmds("User", {
-    pattern = "PackLoadAll",
+    pattern = "PackDone",
   })
 end
 

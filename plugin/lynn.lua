@@ -4,14 +4,6 @@ end
 
 vim.g.loaded_lynn = true
 
-vim.api.nvim_create_autocmd("User", {
-  pattern = "PackLoadAll",
-  group = require("lynn").group,
-  once = true,
-  callback = function()
-    require("lynn").loadall()
-  end,
-})
 vim.api.nvim_create_autocmd("PackChanged", {
   group = require("lynn").group,
   callback = function(ev)

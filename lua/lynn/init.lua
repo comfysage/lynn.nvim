@@ -137,8 +137,22 @@ function lynn.runhook(plug, hook, use_default)
 end
 
 ---@param plug lynn.plug
+---@return integer id
 local function pack_lazy(plug)
-  vim.api.nvim_create_autocmd(plug.event, {
+  if type(plug.event) == "string" then
+    ---@diagnostic disable-next-line: param-type-mismatch
+    local event = vim.split(plug.event, " ")
+    return vim.api.nvim_create_autocmd(event[1], {
+      group = lynn.group,
+      pattern = event[2],
+      once = true,
+      callback = function()
+        lynn.plugadd(plug, true)
+      end,
+    })
+  end
+
+  return vim.api.nvim_create_autocmd(plug.event, {
     group = lynn.group,
     once = true,
     callback = function()

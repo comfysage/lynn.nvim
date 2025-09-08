@@ -1,6 +1,17 @@
 ---@module 'lynn'
 
-local utils = require("lynn.utils")
+local lzrq = function(modname)
+  return setmetatable({
+    modname = modname,
+  }, {
+    __index = function(t, k)
+      local m = rawget(t, "modname")
+      return m and require(m)[k] or nil
+    end,
+  })
+end
+
+local utils = lzrq("lynn.utils")
 
 local lynn = {}
 
@@ -303,7 +314,7 @@ function lynn.setup(modname)
     lynn.import(modname)
   end
 
-  require("lynn").loadall()
+  lynn.loadall()
 
   vim.api.nvim_exec_autocmds("User", {
     pattern = "PackDone",

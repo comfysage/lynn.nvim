@@ -4,6 +4,19 @@ end
 
 vim.g.loaded_lynn = true
 
+local lzrq = function(modname)
+  return setmetatable({
+    modname = modname,
+  }, {
+    __index = function(t, k)
+      local m = rawget(t, "modname")
+      return m and require(m)[k] or nil
+    end,
+  })
+end
+
+local lynn = lzrq("lynn")
+
 vim.api.nvim_create_autocmd("PackChanged", {
   group = vim.api.nvim_create_augroup("lynn:packchanged:build", { clear = true }),
   callback = function(ev)
@@ -11,7 +24,7 @@ vim.api.nvim_create_autocmd("PackChanged", {
 
     if kind == "install" or kind == "update" then
       local spec = ev.data.spec ---@type lynn.plug
-      require("lynn").runhook(spec, "build", true)
+      lynn.runhook(spec, "build", true)
     end
   end,
 })
@@ -28,8 +41,8 @@ end, {
   complete = "packadd",
 })
 vim.api.nvim_create_user_command("PackSync", function()
-  require("lynn").sync()
+  lynn.sync()
 end, {})
 vim.api.nvim_create_user_command("PackClean", function()
-  require("lynn").clean()
+  lynn.clean()
 end, {})

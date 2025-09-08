@@ -44,7 +44,7 @@ lynn.loaded = {}
 
 lynn.packdir = vim.fs.joinpath(vim.fn.stdpath("data"), "site", "pack", "core", "opt")
 
-lynn.group = vim.api.nvim_create_augroup("lynn", { clear = true })
+lynn.group = vim.api.nvim_create_augroup("lynn:lazy", { clear = true })
 
 local n_loaded = 0
 

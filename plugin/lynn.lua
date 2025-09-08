@@ -5,7 +5,7 @@ end
 vim.g.loaded_lynn = true
 
 vim.api.nvim_create_autocmd("PackChanged", {
-  group = require("lynn").group,
+  group = vim.api.nvim_create_augroup("lynn:packchanged:build", { clear = true }),
   callback = function(ev)
     local kind = ev.data.kind ---@type string
 

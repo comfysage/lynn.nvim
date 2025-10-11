@@ -41,7 +41,7 @@ end
 ---@field before? function
 ---@field after? function
 ---@field build? string|function
----@field deps? lynn.plug.spec[]
+---@field deps? string[]
 
 ---@class lynn.plug.spec : lynn.plug
 ---@field [1] string
@@ -190,7 +190,7 @@ function lynn.plugadd(plug, load)
 
   -- add dependencies
   if plug.deps then
-    vim.tbl_map(lynn.register, plug.deps)
+    vim.tbl_map(lynn.load, plug.deps)
   end
 
   -- add to loaded

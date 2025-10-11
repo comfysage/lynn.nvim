@@ -236,7 +236,11 @@ function lynn.translate(plug)
     src = plug.url,
     name = plug.name,
     version = plug.version,
-    data = plug,
+    data = {
+      before = plug.before,
+      after = plug.after,
+      build = plug.build,
+    },
   }
 end
 

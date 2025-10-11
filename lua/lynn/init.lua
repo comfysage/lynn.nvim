@@ -220,6 +220,9 @@ function lynn.norm(plug)
     plug = { plug }
   end
   plug.url = plug.url or plug[1]
+  if plug.path and not plug.url then
+    plug.url = "file://" .. vim.fs.normalize(plug.path)
+  end
   plug.url = utils.norm_url(plug.url)
   plug.name = plug.name or utils.get_name(plug.url)
   plug.path = plug.path or vim.fs.joinpath(lynn.packdir, plug.name)

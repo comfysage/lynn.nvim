@@ -22,7 +22,8 @@ function utils.norm_url(str)
   if n == 0 then
     return utils.norm_url("github:" .. s)
   end
-  if string.sub(s, -4) ~= ".git" then
+  local protocol = string.match(s, "^(%w+)://")
+  if protocol == "git" and string.sub(s, -4) ~= ".git" then
     s = s .. ".git"
   end
 
@@ -53,7 +54,11 @@ end
 ---@param url string
 ---@return string
 function utils.get_name(url)
-  return utils.norm_name(string.match(url, "([^/]+)%.git$"))
+  local bud = string.match(url, "([^/]+)$")
+  if string.sub(bud, -4) == ".git" then
+    bud = string.sub(bud, 1, -5)
+  end
+  return utils.norm_name(bud)
 end
 
 function utils.get_inactive()

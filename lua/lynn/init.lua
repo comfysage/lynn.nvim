@@ -199,7 +199,12 @@ function lynn.plugadd(plug, load)
 
   lynn.runhook(plug, "before", true)
 
-  vim.cmd.packadd({ plug.name, bang = not load })
+  do
+    local ok, result = pcall(vim.cmd.packadd, { plug.name, bang = not load })
+    if not ok then
+      return logerr("error running |:packadd| for " .. plug.name .. ":", "\t" .. result)
+    end
+  end
 
   lynn.runhook(plug, "after", true)
 

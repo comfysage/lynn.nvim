@@ -266,9 +266,13 @@ end
 
 --- load a plugin by either running `lynn.plugadd` or wrapping the callback in
 --- an autocmd
----@param plug lynn.plug
-function lynn.load(plug)
-  if not plug.lazy then
+---@param name string
+function lynn.load(name)
+  local plug = lynn.plugins[name]
+  if not plug then
+    return logerr("plugin '" .. name .. "' not found")
+  end
+
     return lynn.plugadd(plug)
   elseif plug.event then
     return pack_lazy(plug)
@@ -279,8 +283,8 @@ end
 
 --- load all plugins
 function lynn.loadall()
-  vim.iter(pairs(lynn.plugins)):each(function(name, spec)
-    local ok, result = pcall(lynn.load, spec)
+  vim.iter(pairs(lynn.plugins)):each(function(name, _)
+    local ok, result = pcall(lynn.load, name)
     if not ok then
       logerr('error while loading plugin "' .. name .. '":', "\t" .. result)
     end

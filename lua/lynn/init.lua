@@ -273,12 +273,11 @@ function lynn.load(name)
     return logerr("plugin '" .. name .. "' not found")
   end
 
+  if not plug.lazy and not plug.event then
     return lynn.plugadd(plug)
   elseif plug.event then
     return pack_lazy(plug)
   end
-
-  return logerr("plugin " .. plug.name .. " is lazy but has no event")
 end
 
 --- load all plugins

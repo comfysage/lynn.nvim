@@ -284,7 +284,8 @@ end
 
 --- import a list of plugins from a module
 ---@param modname string
-function lynn.import(modname)
+---@param nopack? boolean avoid adding the plugin to `vim.pack` until later
+function lynn.import(modname, nopack)
   local plugs
 
   do
@@ -311,14 +312,17 @@ function lynn.import(modname)
       return lynn.translate(p)
     end)
     :totable()
-  vim.pack.add(packspecs, { load = false })
+  if not nopack then
+    vim.pack.add(packspecs, { load = false })
+  end
 end
 
 --- run |lynn.import()| and run packload for all plugins
 ---@param modname? string
-function lynn.setup(modname)
+---@param nopack? boolean avoid adding the plugin to `vim.pack` until later
+function lynn.setup(modname, nopack)
   if modname then
-    lynn.import(modname)
+    lynn.import(modname, nopack)
   end
 
   lynn.loadall()

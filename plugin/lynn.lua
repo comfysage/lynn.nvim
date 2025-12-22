@@ -17,6 +17,13 @@ end
 
 local lynn = lzrq("lynn")
 
+vim.api.nvim_create_autocmd("UIEnter", {
+  group = vim.api.nvim_create_augroup("lynn:uienter:notify", { clear = true }),
+  callback = function()
+    lynn.do_notify()
+  end,
+})
+
 vim.api.nvim_create_autocmd("PackChanged", {
   group = vim.api.nvim_create_augroup("lynn:packchanged:build", { clear = true }),
   callback = function(ev)

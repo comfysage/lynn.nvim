@@ -17,14 +17,40 @@ local lynn = {}
 
 -- utils --
 
+local did_ui_enter = false
+local notif_queue = nil
+local function notify(...)
+  if did_ui_enter then
+    return vim.notify(...)
+  end
+
+  notif_queue = notif_queue or {}
+  notif_queue[#notif_queue + 1] = { ... }
+end
+
+lynn.do_notify = function()
+  did_ui_enter = true
+
+  if not notif_queue then
+    return
+  end
+
+  vim.schedule(function()
+    for _, v in ipairs(notif_queue) do
+      notify(unpack(v))
+    end
+    notif_queue = nil
+  end)
+end
+
 local function logdebug(...)
   if vim.o.debug ~= "" then
-    vim.notify(table.concat({ ... }, "\n"), vim.log.levels.DEBUG)
+    notify(table.concat({ ... }, "\n"), vim.log.levels.DEBUG)
   end
 end
 
 local function logerr(...)
-  vim.notify(table.concat({ ... }, "\n"), vim.log.levels.ERROR)
+  notify(table.concat({ ... }, "\n"), vim.log.levels.ERROR)
 
   if vim.o.debug == "throw" then
     error(table.concat({ ... }, "\n"))

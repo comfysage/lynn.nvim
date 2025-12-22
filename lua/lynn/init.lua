@@ -38,8 +38,9 @@ end
 ---@field version? string|vim.VersionRange
 ---@field lazy? boolean
 ---@field event? string|string[]
----@field before? function
----@field after? function
+---@field init? function function run before loading the plugin
+---@field load? function function run to load the plugin
+---@field config? function function run after loading the plugin
 ---@field build? string|function
 ---@field deps? string[]
 
@@ -67,13 +68,30 @@ lynn.plugins = {}
 
 ---@alias lynn.hook fun(spec: lynn.plug)
 ---@alias lynn.hook.builtin
----|'before'
+---|'init'
+---|'load'
+---|'config'
 ---|'build'
----|'after'
 
 ---@type table<lynn.hook.builtin, lynn.hook>
 lynn.default_hooks = {
-  before = function(_) end,
+  init = function(_) end,
+  load = function(spec)
+    local ok, result = pcall(vim.cmd.packadd, { spec.name, bang = vim.v.vim_did_init == 0 })
+    if not ok then
+      return logerr("error running |:packadd| for " .. spec.name .. ":", "\t" .. result)
+    end
+
+    if not vim.v.vim_did_init == 0 then
+      local after_paths = vim.fn.glob(spec.path .. "/after/plugin/**/*.{vim,lua}", false, true)
+      vim.tbl_map(function(path)
+        pcall(vim.cmd.source, vim.fn.fnameescape(path))
+      end, after_paths)
+    end
+  end,
+  config = function(spec)
+    vim.cmd.runtime({ "config/" .. spec.name .. ".lua", bang = true })
+  end,
   build = function(spec)
     if type(spec.build) ~= "string" then
       return
@@ -104,9 +122,6 @@ lynn.default_hooks = {
       end)
       return
     end
-  end,
-  after = function(spec)
-    vim.cmd.runtime({ "config/" .. spec.name .. ".lua", bang = true })
   end,
 }
 
@@ -158,7 +173,7 @@ local function pack_lazy(plug)
       pattern = event[2],
       once = true,
       callback = function()
-        lynn.plugadd(plug, true)
+        lynn.plugadd(plug)
       end,
     })
   end
@@ -167,7 +182,7 @@ local function pack_lazy(plug)
     group = lynn.group,
     once = true,
     callback = function()
-      lynn.plugadd(plug, true)
+      lynn.plugadd(plug)
     end,
   })
 end
@@ -176,11 +191,10 @@ end
 --- - add the plugin to the loaded list
 --- - check deps
 --- - run |:packadd|
---- - run before/after hooks
+--- - run init/config hooks
 --- - check if `after/` dirs should be loaded
 ---@param plug lynn.plug
----@param load? boolean
-function lynn.plugadd(plug, load)
+function lynn.plugadd(plug)
   if type(plug) == "string" then
     plug = lynn.plugins[plug]
   end
@@ -197,25 +211,9 @@ function lynn.plugadd(plug, load)
   n_loaded = n_loaded + 1
   lynn.loaded[plug.path] = { plug = plug, id = n_loaded }
 
-  lynn.runhook(plug, "before", true)
-
-  do
-    local ok, result = pcall(vim.cmd.packadd, { plug.name, bang = not load })
-    if not ok then
-      return logerr("error running |:packadd| for " .. plug.name .. ":", "\t" .. result)
-    end
-  end
-
-  lynn.runhook(plug, "after", true)
-
-  local should_load_after_dir = vim.v.vim_did_enter == 1 and load and vim.o.loadplugins
-
-  if should_load_after_dir then
-    local after_paths = vim.fn.glob(plug.path .. "/after/plugin/**/*.{vim,lua}", false, true)
-    vim.tbl_map(function(path)
-      pcall(vim.cmd.source, vim.fn.fnameescape(path))
-    end, after_paths)
-  end
+  lynn.runhook(plug, "init", true)
+  lynn.runhook(plug, "load", true)
+  lynn.runhook(plug, "config", true)
 end
 
 ---@param plug lynn.plug.spec|string
@@ -245,8 +243,9 @@ function lynn.translate(plug)
     name = plug.name,
     version = plug.version,
     data = {
-      before = plug.before,
-      after = plug.after,
+      init = plug.init,
+      load = plug.load,
+      config = plug.config,
       build = plug.build,
     },
   }

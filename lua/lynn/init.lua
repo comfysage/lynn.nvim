@@ -298,6 +298,10 @@ function lynn.load(name)
     return logerr("plugin '" .. name .. "' not found")
   end
 
+  if lynn.loaded[plug.path] then
+    return
+  end
+
   if not plug.lazy and not plug.event then
     return lynn.plugadd(plug)
   elseif plug.event then

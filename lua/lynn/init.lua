@@ -134,15 +134,16 @@ lynn.default_hooks = {
       return
     end
 
-    vim.system(vim.split(buildstr, " "), {
-      cwd = spec.path,
-    }, function(result)
-      if result.code == 0 then
-        return
-      end
+    local result = vim
+      .system(vim.split(buildstr, " "), {
+        cwd = spec.path,
+      })
+      :wait()
+    if result.code == 0 then
+      return
+    end
 
-      logerr("error running build command for " .. spec.name .. ":", "\t" .. result.stderr)
-    end)
+    logerr("error running build command for " .. spec.name .. ":", "\t" .. result.stderr)
   end,
 }
 

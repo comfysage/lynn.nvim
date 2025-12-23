@@ -37,12 +37,12 @@ vim.api.nvim_create_autocmd("PackChanged", {
 })
 
 vim.api.nvim_create_user_command("PackUpdate", function(props)
+  ---@type string[]|nil
   local names = props.fargs
   if #names == 0 then
-    vim.api.nvim_echo({ { "no plugin names given" } }, false, { err = true })
-    return
+    names = nil
   end
-  vim.pack.update(props.fargs)
+  vim.pack.update(names)
 end, {
   nargs = "*",
   complete = "packadd",

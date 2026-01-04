@@ -43,18 +43,61 @@ lynn.do_notify = function()
   end)
 end
 
+---@param v any
+---@return string
+local function inspect(v)
+  if type(v) == "table" and not vim.islist(v) then
+    return table.concat(
+      vim
+        .iter(pairs(v))
+        :map(function(key, value)
+          return string.format("%s=%q", inspect(key), inspect(value))
+        end)
+        :totable(),
+      " "
+    )
+  end
+
+  return type(v) ~= "string" and vim.inspect(v) or v
+end
+
+---@param ... any
+---@return string
+local function logfmt(...)
+  local c = { ... }
+  local t = vim
+    .iter(ipairs(c))
+    :map(function(_, item)
+      return inspect(item)
+    end)
+    :totable()
+  return table.concat(t, " ")
+end
+
+---@param ... any
 local function logdebug(...)
   if vim.o.debug ~= "" then
-    notify(table.concat({ ... }, "\n"), vim.log.levels.DEBUG)
+    notify(logfmt(...), vim.log.levels.DEBUG)
   end
 end
 
+---@param ... any
+---@return string?
 local function logerr(...)
-  notify(table.concat({ ... }, "\n"), vim.log.levels.ERROR)
+  local l = logfmt(...)
+
+  notify(l, vim.log.levels.ERROR)
 
   if vim.o.debug == "throw" then
-    error(table.concat({ ... }, "\n"))
+    return error(l)
   end
+end
+
+---@param msg string
+---@param trace string
+---@return string?
+local function logtrace(msg, trace)
+  return logerr(string.format("lynn: %s:\n\t%s", msg, trace))
 end
 
 ---@class lynn.plug
@@ -105,7 +148,8 @@ lynn.default_hooks = {
   load = function(spec)
     local ok, result = pcall(vim.cmd.packadd, { spec.name, bang = vim.v.vim_did_init == 0 })
     if not ok then
-      return logerr("error running |:packadd| for " .. spec.name .. ":", "\t" .. result)
+      logerr("error running |:packadd|", { ["spec.name"] = spec.name })
+      return logtrace("load", result)
     end
 
     if not vim.v.vim_did_init == 0 then
@@ -143,7 +187,8 @@ lynn.default_hooks = {
       return
     end
 
-    logerr("error running build command for " .. spec.name .. ":", "\t" .. result.stderr)
+    logerr("error running build command", { ["spec.name"] = spec.name })
+    return logtrace("build", result.stderr)
   end,
 }
 
@@ -155,12 +200,12 @@ local function wraphook(plug, hook, fn)
     return
   end
 
-  logdebug('running "' .. hook .. '" for plugin "' .. plug.name .. '"')
+  logdebug("running hook", { hook = hook, ["plug.name"] = plug.name })
   do
     local ok, result = pcall(fn, plug)
     if not ok then
-      logerr("error running " .. hook .. " function for " .. plug.name .. ":", "\t" .. result)
-      return
+      logerr("error running hook", { hook = hook, ["plug.name"] = plug.name })
+      return logtrace("wraphook", result)
     end
   end
 end
@@ -291,7 +336,7 @@ end
 function lynn.load(name)
   local plug = lynn.plugins[name]
   if not plug then
-    return logerr("plugin '" .. name .. "' not found")
+    return logerr("plugin not found", { name = name })
   end
 
   if lynn.loaded[plug.path] then
@@ -310,7 +355,8 @@ function lynn.loadall()
   vim.iter(pairs(lynn.plugins)):each(function(name, _)
     local ok, result = pcall(lynn.load, name)
     if not ok then
-      logerr('error while loading plugin "' .. name .. '":', "\t" .. result)
+      logerr("error while loading plugin", { name = name })
+      return logtrace("load", result)
     end
   end)
 end
@@ -319,13 +365,17 @@ end
 ---@param modname string
 ---@param nopack? boolean avoid adding the plugin to `vim.pack` until later
 function lynn.import(modname, nopack)
+  logdebug("importing plugins", { modname = modname, nopack = not not nopack })
+
   local plugs
 
   do
     local ok, result = pcall(require, modname)
-    if ok then
-      plugs = result
+    if not ok then
+      logerr("failed to import module", { modname = modname })
+      return logtrace("import", result)
     end
+    plugs = result
   end
   if not plugs then
     return
@@ -339,8 +389,8 @@ function lynn.import(modname, nopack)
     :map(function(p)
       local ok, result = pcall(lynn.register, p, true)
       if not ok then
-        logerr('error while registering plugin "' .. p.name .. '":', "\t" .. result)
-        return
+        logerr("error while registering plugin", { ["plug.name"] = p.name })
+        return logtrace("register", result)
       end
       return lynn.translate(p)
     end)
@@ -388,7 +438,7 @@ function lynn.clean()
   local plugstr = table.concat(pluglist, "\n")
 
   vim.ui.input({
-    prompt = "Delete inactive plugins? (y/N)\n" .. plugstr,
+    prompt = "Delete inactive plugins? (y/N)\n" .. plugstr .. "\n",
   }, function(input)
     if string.lower(input) == "y" then
       vim.tbl_map(function(p)

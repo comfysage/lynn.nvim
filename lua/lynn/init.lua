@@ -362,27 +362,22 @@ function lynn.loadall()
 end
 
 --- import a list of plugins from a module
----@param modname string
+---@param plugins lynn.plug.spec[]|string plugins|modname
 ---@param nopack? boolean avoid adding the plugin to `vim.pack` until later
-function lynn.import(modname, nopack)
-  logdebug("importing plugins", { modname = modname, nopack = not not nopack })
+function lynn.import(plugins, nopack)
+  if type(plugins) == "string" then
+    logdebug("importing plugins", { modname = plugins, nopack = not not nopack })
 
-  local plugs
-
-  do
-    local ok, result = pcall(require, modname)
+    local ok, result = pcall(require, plugins)
     if not ok then
-      logerr("failed to import module", { modname = modname })
+      logerr("failed to import module", { modname = plugins })
       return logtrace("import", result)
     end
-    plugs = result
-  end
-  if not plugs then
-    return
+    return lynn.import(result)
   end
 
   local packspecs = vim
-    .iter(ipairs(plugs))
+    .iter(ipairs(plugins))
     :map(function(_, p)
       return lynn.norm(p)
     end)
@@ -390,7 +385,7 @@ function lynn.import(modname, nopack)
       local ok, result = pcall(lynn.register, p, true)
       if not ok then
         logerr("error while registering plugin", { ["plug.name"] = p.name })
-        return logtrace("register", result)
+        return logtrace("register", result or "")
       end
       return lynn.translate(p)
     end)
@@ -401,11 +396,11 @@ function lynn.import(modname, nopack)
 end
 
 --- run |lynn.import()| and run packload for all plugins
----@param modname? string
+---@param plugins? lynn.plug.spec[]|string plugins|modname
 ---@param nopack? boolean avoid adding the plugin to `vim.pack` until later
-function lynn.setup(modname, nopack)
-  if modname then
-    lynn.import(modname, nopack)
+function lynn.setup(plugins, nopack)
+  if plugins then
+    lynn.import(plugins, nopack)
   end
 
   lynn.loadall()

@@ -373,7 +373,7 @@ function lynn.import(plugins, nopack)
       logerr("failed to import module", { modname = plugins })
       return logtrace("import", result)
     end
-    return lynn.import(result)
+    return lynn.import(result, nopack)
   end
 
   local packspecs = vim

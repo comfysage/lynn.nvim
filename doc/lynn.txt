@@ -1,0 +1,144 @@
+*lynn.txt*  A small plugin manager built around vim.pack
+
+==============================================================================
+1. Contents                                                    *lynn-contents*
+
+1. Contents..........................|lynn-contents|
+2. Usage.............................|lynn-usage|
+3. Plugin Specification..............|lynn-spec|
+4. Plugin Configuration..............|lynn-config|
+5. Lazy Loading......................|lynn-lazy|
+6. User Commands.....................|lynn-commands|
+
+==============================================================================
+2. Usage                                                          *lynn-usage*
+
+You must include `require("lynn").setup(modname)` somewhere in your lua
+configuration (likely `init.lua` but it can be elsewhere). `modname` is the
+module containing your plugin specs. For a description of lynn's plugin spec
+see |lynn-spec|. An example configuration could be:
+>lua
+    require("lynn").setup("plugins")
+<
+And then `lua/plugins.lua` would contain the specs
+>lua
+    return {
+        "tpope/vim-fugitive",
+        {
+	    "eraserhd/parinfer-rust",
+	    build="cargo build --release",
+        },
+    }
+<
+
+Note that lynn requires that the plugin module returns the plugin specs.
+
+Alternatively the argument to `setup()` can be an array of plugin specs, like
+so:
+>lua
+    require("lynn").setup({
+      { "comfysage/artio.nvim" },
+      { "everviolet/nvim", name = "evergarden" },
+    })
+<
+
+To configure your installed plugins, add a lua file to
+`config/<plugname>.lua`. See |lynn-config| for details.
+==============================================================================
+3. Plugin Specification                                            *lynn-spec*
+
+Lynn plugin specs have the following fields:
+    - {1}?       (string) Same as {url}
+
+    - {name}?    (string) Optional name to pass vim.pack; see |vim.pack.Spec|
+
+    - {url}?     (string) URL of the repo. Can be in the form of "owner/repo",
+                 which resolves to a github url by default. Optionally you can
+		 add a prefix that specifies the code forge. Supported
+		 prefixes are "github", "gitlab", "srht" (Sourcehut) and
+		 "codeberg".
+
+    - {path}?    (string) Filesystem path in case of a local plugin. If path
+                 and {url} are both defined, then {url} is used
+
+    - {version}? (string|vim.VersionRange) see |vim.pack.Spec|
+
+    - {lazy}?    (boolean) Determines whether the plugin will be loaded lazily.
+                 See |lynn-lazy|
+
+    - {event}?   (string|string[]) Event to lazy load on, see |lynn-lazy|. If
+                 this is defined, then the plugin will be lazy-loaded
+		 regardless of the value of {lazy}
+
+    - {init}?    (function): Function run before loading the plugin
+
+    - {load}?    (function): Function run to load the plugin
+
+    - {config}?  (function): Function run after loading the plugin. However
+                 you should prefer creating dedicated config files; see
+		 |lynn-config|.
+
+    - {build}?   (string|function) system command/function that runs after
+                 installing or updating a plugin.
+
+
+Notice that there is no "opts" field, Lynn does not automatically call the
+plugin's setup function. You will have to do that yourself in the plugin's
+configuration, see |lynn-config|.
+
+==============================================================================
+4. Plugin Configuration                                          *lynn-config*
+
+When loading a plugin named `foo`, Lynn will source the lua file
+`config/foo.lua`. That is, if there is a lua file with the same name as your
+plugin in the config subfolder of your neovim configuration, Lynn will run it
+after the plugin is loaded.
+
+The name that Lynn uses to check for these files is the same name that is used
+in `vim.pack`. By default, this is the name of the repo with vim/nvim prefixes
+and postfixes removed. As an example, `nvim-lspconfig` becomes `lspconfig` and
+`fugitive.vim` becomes `fugitive`.
+
+You can optionally define this name yourself in lynn's spec, see |lynn-spec|.
+
+You should put all your plugin-specific configuration in that file, including
+but not limited to calling the plugin's setup function.
+
+==============================================================================
+5. Lazy Loading                                                    *lynn-lazy*
+
+When a plugin spec (see |lynn-spec|) has {lazy} or {event} defined, lynn
+defers loading it until necessary. {event} can be a string or an array of
+strings.
+
+In the case of a single string, lynn also supports setting |autocmd-pattern|s.
+You do this by separating the event and pattern by a space, i.e. to have a
+plugin load in markdown files you could use `"BufEnter *.md"` or `"FileType
+markdown"`.
+
+Note that this mechanism is not supported if you pass in a list of strings
+instead.
+
+If {lazy} is true and {event} is not defined, then the plugin will not load at
+all, until it is manually loaded with `lynn.load()`. Please see the source
+code for the documentation of the lynn api.
+
+==============================================================================
+6. User Commands                                               *lynn-commands*
+
+Lynn defines a number of quality of life commands to help manage your plugins.
+
+                                                                 *:PackUpdate*
+:PackUpdate [plugin]
+                         Updates all plugins. If [plugin] is supplied then
+			 [plugin] is the only plugin that is updated. You can
+			 pass multiple plugins separated by spaces
+
+                                                                   *:PackSync*
+:PackSync
+                         Updates all plugins.
+
+                                                                  *:PackClean*
+:PackClean
+                         Removes the directories of inactive plugins.
+ vim:tw=78:ts=8:noet:ft=help:norl:

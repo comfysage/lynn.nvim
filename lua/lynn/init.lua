@@ -1,12 +1,17 @@
 ---@module 'lynn'
 
+local nonnil = vim.nonnil or vim.F.if_nil
+
 local lzrq = function(modname)
   return setmetatable({
     modname = modname,
   }, {
     __index = function(t, k)
       local m = rawget(t, "modname")
-      return m and require(m)[k] or nil
+      if not m then
+        return
+      end
+      return require(m)[k]
     end,
   })
 end
@@ -111,6 +116,7 @@ end
 ---@field load? function function run to load the plugin
 ---@field config? function function run after loading the plugin
 ---@field build? string|function
+---@field ensure? boolean defaults to true, ensure the package is installed
 ---@field deps? string[]
 
 ---@class lynn.plug.spec : lynn.plug
@@ -233,7 +239,6 @@ end
 ---@return integer id
 local function pack_lazy(plug)
   if type(plug.event) == "string" then
-    ---@diagnostic disable-next-line: param-type-mismatch
     local event = vim.split(plug.event, " ")
     return vim.api.nvim_create_autocmd(event[1], {
       group = lynn.group,
@@ -298,6 +303,8 @@ function lynn.norm(plug)
   plug.path = plug.path or vim.fs.joinpath(lynn.packdir, plug.name)
   ---@diagnostic disable-next-line: cast-type-mismatch
   ---@cast plug lynn.plug
+
+  plug.ensure = nonnil(plug.ensure, true)
   return plug
 end
 
@@ -314,18 +321,18 @@ function lynn.translate(plug)
       load = plug.load,
       config = plug.config,
       build = plug.build,
+      ensure = plug.ensure,
     },
   }
 end
 
 --- register a plugin
 ---@param plug lynn.plug.spec|string
----@param nopack? boolean avoid adding the plugin to `vim.pack` until later
-function lynn.register(plug, nopack)
+function lynn.register(plug)
   local p = lynn.norm(plug)
 
   lynn.plugins[p.name] = vim.tbl_extend("keep", p, lynn.plugins[p.name] or {})
-  if not nopack then
+  if p.ensure then
     vim.pack.add({ lynn.translate(p) }, { load = false })
   end
 end
@@ -379,20 +386,30 @@ function lynn.import(plugins, nopack)
   local packspecs = vim
     .iter(ipairs(plugins))
     :map(function(_, p)
-      return lynn.norm(p)
+      p = lynn.norm(p)
+      if nopack then
+        p.ensure = false
+      end
+      return p
     end)
     :map(function(p)
-      local ok, result = pcall(lynn.register, p, true)
+      local ok, result = pcall(lynn.register, p)
       if not ok then
         logerr("error while registering plugin", { ["plug.name"] = p.name })
         return logtrace("register", result or "")
       end
       return lynn.translate(p)
     end)
+    :filter(function(p)
+      return p.ensure
+    end)
     :totable()
-  if not nopack then
-    vim.pack.add(packspecs, { load = false })
+
+  if #packspecs == 0 then
+    return
   end
+
+  vim.pack.add(packspecs, { load = false })
 end
 
 --- run |lynn.import()| and run packload for all plugins

@@ -54,9 +54,9 @@ Lynn plugin specs have the following fields:
 
     - {url}?     (string) URL of the repo. Can be in the form of "owner/repo",
                  which resolves to a github url by default. Optionally you can
-		 add a prefix that specifies the code forge. Supported
-		 prefixes are "github", "gitlab", "srht" (Sourcehut) and
-		 "codeberg".
+		 add a prefix (separated by a colon) that specifies the code 
+		 forge. Supported prefixes are "github", "gitlab", 
+		 "srht" (Sourcehut) and "codeberg".
 
     - {path}?    (string) Filesystem path in case of a local plugin. If {path}
                  and {url} are both defined, then {url} is used
